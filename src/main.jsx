@@ -1,6 +1,7 @@
 import {validateTerms,formatCAD,formatDuration} from './terms.js';
 import React,{useState,useEffect,useRef} from 'react';import{createRoot}from'react-dom/client';import{BrowserProvider,Contract,ContractFactory,formatUnits,isAddress}from'ethers';import{ArrowUpRight,ArrowRight,Plus,Search,SlidersHorizontal,Wallet,ShieldCheck,Check,Lock,Play,ChevronRight,X,RefreshCw,ExternalLink,Copy,FileVideo,Upload,Eye,Settings,CheckCircle2,AlertCircle,Layers,LogOut,Link,Clock,LayoutGrid,Menu}from'lucide-react';
 import{ABI,TOKEN_ABI,CHAIN_ID,RPC,RPC_FALLBACK,STATUS,same,roleOf,effective,can}from'./chain.js';import'./style.css';
+const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const short=a=>a?a.slice(0,6)+'…'+a.slice(-4):'연결 전';const date=t=>Number(t)?new Date(Number(t)*1000).toLocaleString('ko-KR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 const roles={public:{name:'전체 광고',en:'AD DISCOVER',title:<>동의가 모이면,<br/>광고가 시작됩니다.</>,desc:'영상 등록부터 승인, 집행과 정산까지. 광고의 모든 과정을 투명하게 확인하세요.'},advertiser:{name:'광고주',en:'ADVERTISER',title:<>아이디어를 등록하고,<br/>신뢰를 쌓아보세요.</>,desc:'내가 등록한 광고를 모아보고, 광고비 예치와 환불을 관리하세요.'},rightsHolder:{name:'권리자',en:'RIGHTS HOLDER',title:<>내 목소리와 얼굴,<br/>내 동의로 시작합니다.</>,desc:'내 권리가 포함된 영상을 확인하고, 광고 사용을 승인하거나 거절하세요.'},platform:{name:'플랫폼',en:'PLATFORM',title:<>확인된 동의로,<br/>책임 있게 집행하세요.</>,desc:'권리자 승인과 영상 해시를 확인하고, 광고 게시와 정산을 진행하세요.'}};
 const demoData=[['온전히 나다운, 오늘의 목소리','라이프스타일',3,'lime','VOICE / ORIGINAL'],['새로운 하루를 여는 한 잔','음료·식품',2,'peach','A GOOD START'],['도시를 달리는 새로운 방식','모빌리티',4,'blue','MOVE FORWARD'],['피부에 닿는 작은 변화','뷰티',1,'pink','LESS, BUT BETTER'],['우리의 내일을 위한 선택','브랜드',5,'sand','FOR TOMORROW'],['듣고 싶은 순간을 담다','테크',6,'purple','SOUND OF YOU']].map((x,i)=>({address:'0x'+String(i+1).padStart(40,'0'),title:x[0],category:x[1],status:x[2],theme:x[3],art:x[4],advertiser:'0x49fCca18488eB17276E76D8FFFbE84D6d3ca9cC9',rightsHolder:'0x258df63a63c39682481f0A5d74c8B3fAf7Edf6Bf',platform:'0x292B2005f82De524121b147000642780e423A479',RIGHTS_FEE:'200',PLATFORM_FEE:'800',TOTAL_FEE:'1000',EXECUTION_WINDOW:'604800',USAGE_PERIOD:'2592000',escrowBalance:[2,3].includes(x[2])?'1000':'0',executionDeadline:Math.floor(Date.now()/1000)+86400*(i+1),usageEnd:Math.floor(Date.now()/1000)+86400*30,videoHash:'0x'+'1'.repeat(64),playable:x[2]===4,hasVideo:false,demo:true,blockNumber:123456+i}));
@@ -15,9 +16,118 @@ function App(){const[page,setPage]=useState(location.hash.slice(1)||'public'),[w
 const pageInfo=roles[page]||roles.public;
 useEffect(()=>{const onHash=()=>setPage(roles[location.hash.slice(1)]?location.hash.slice(1):'public');window.addEventListener('hashchange',onHash);return()=>window.removeEventListener('hashchange',onHash)},[]);function nav(p){setPage(p);location.hash=p;setScope('mine');setFilter('전체');setQuery('');setModal('');}
 function openRegistration(kind='create'){nav('advertiser');setModal(kind);}
-async function refresh(){setLoading(true);setFailure('');try{let all=[],cursor;do{const d=await api('/ads'+(cursor?'?cursor='+encodeURIComponent(cursor):''));all.push(...d.ads);cursor=d.cursor;}while(cursor);setAds(all);if(selected&&!selected.demo){const d=all.find(x=>same(x.address,selected.address));if(d)setSelected(d);}}catch(e){setFailure(errorText(e));}finally{setLoading(false)}}
-useEffect(()=>{refresh();api('/session').then(d=>setSession(d.address||'')).catch(()=>{});if(window.ethereum){window.ethereum.request({method:'eth_accounts'}).then(a=>setWallet(a[0]||''));window.ethereum.request({method:'eth_chainId'}).then(c=>setChain(Number(c)));const accounts=a=>{setWallet(a[0]||'');setSession('');api('/auth/logout',{method:'POST'}).catch(()=>{});setNotice({type:'info',text:'지갑이 바뀌었습니다. 원본 검토 전 다시 본인 확인을 해주세요.'})};const chains=c=>{setChain(Number(c));setSession('');api('/auth/logout',{method:'POST'}).catch(()=>{})};window.ethereum.on('accountsChanged',accounts);window.ethereum.on('chainChanged',chains);return()=>{window.ethereum.removeListener('accountsChanged',accounts);window.ethereum.removeListener('chainChanged',chains)}}},[]);
-useEffect(()=>{const t=setInterval(()=>{if(!demo)refresh()},30000);return()=>clearInterval(t)},[demo,selected?.address]);
+
+async function refresh() {
+    setLoading(true);
+    setFailure('');
+
+    // GitHub Pages에서는 예시 광고만 표시
+    if (IS_GITHUB_PAGES) {
+        setAds(demoData);
+        setLoading(false);
+        return;
+    }
+
+    try {
+        let all = [], cursor;
+
+        do {
+            const d = await api(
+                '/ads' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '')
+            );
+
+            all.push(...d.ads);
+            cursor = d.cursor;
+        } while (cursor);
+
+        setAds(all);
+
+        if (selected && !selected.demo) {
+            const d = all.find(
+                x => same(x.address, selected.address)
+            );
+            if (d) setSelected(d);
+        }
+
+    } catch (e) {
+        setFailure(errorText(e));
+    } finally {
+        setLoading(false);
+    }
+}
+
+
+useEffect(() => {
+    refresh();
+
+    // 서버가 있는 환경에서만 로그인 세션 확인
+    if (!IS_GITHUB_PAGES) {
+        api('/session')
+            .then(d => setSession(d.address || ''))
+            .catch(() => {});
+    }
+
+    if (window.ethereum) {
+
+        window.ethereum.request({
+            method: 'eth_accounts'
+        }).then(a => setWallet(a[0] || ''));
+
+        window.ethereum.request({
+            method: 'eth_chainId'
+        }).then(c => setChain(Number(c)));
+
+        const accounts = a => {
+            setWallet(a[0] || '');
+            setSession('');
+
+            if (!IS_GITHUB_PAGES) {
+                api('/auth/logout', {
+                    method: 'POST'
+                }).catch(() => {});
+            }
+
+            setNotice({
+                type: 'info',
+                text: '지갑이 바뀌었습니다.'
+            });
+        };
+
+        const chains = c => {
+            setChain(Number(c));
+            setSession('');
+
+            if (!IS_GITHUB_PAGES) {
+                api('/auth/logout', {
+                    method: 'POST'
+                }).catch(() => {});
+            }
+        };
+
+        window.ethereum.on('accountsChanged', accounts);
+        window.ethereum.on('chainChanged', chains);
+
+        return () => {
+            window.ethereum.removeListener(
+                'accountsChanged', accounts
+            );
+            window.ethereum.removeListener(
+                'chainChanged', chains
+            );
+        };
+    }
+}, []);
+
+useEffect(() => {
+    if (IS_GITHUB_PAGES) return;
+
+    const t = setInterval(() => {
+        if (!demo) refresh();
+    }, 30000);
+
+    return () => clearInterval(t);
+
+}, [demo, selected?.address]);
 useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(null),9000);return()=>clearTimeout(t)},[notice]);
 async function provider(){if(!window.ethereum)throw new Error('MetaMask가 설치된 Chrome에서 사이트를 열어주세요.');const c=Number(await window.ethereum.request({method:'eth_chainId'}));if(c!==CHAIN_ID)throw new Error('Bifrost Testnet(49088)으로 네트워크를 전환해주세요.');const p=new BrowserProvider(window.ethereum);const signer=await p.getSigner();const a=await signer.getAddress();setWallet(a);return {p,signer,address:a};}
 async function switchChain(){if(!window.ethereum)throw new Error('MetaMask를 먼저 설치해주세요.');try{await window.ethereum.request({method:'wallet_switchEthereumChain',params:[{chainId:'0xbfc0'}]})}catch(e){if(e.code===4902)await window.ethereum.request({method:'wallet_addEthereumChain',params:[{chainId:'0xbfc0',chainName:'Bifrost Testnet',rpcUrls:[RPC,RPC_FALLBACK],nativeCurrency:{name:'BFC',symbol:'BFC',decimals:18}}]});else throw e;}setChain(CHAIN_ID);}
