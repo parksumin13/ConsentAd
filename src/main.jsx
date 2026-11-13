@@ -4,7 +4,7 @@ import{ABI,TOKEN_ABI,CHAIN_ID,RPC,RPC_FALLBACK,STATUS,same,roleOf,effective,can}
 const IS_GITHUB_PAGES = window.location.hostname.endsWith('github.io');
 const short=a=>a?a.slice(0,6)+'…'+a.slice(-4):'연결 전';const date=t=>Number(t)?new Date(Number(t)*1000).toLocaleString('ko-KR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 const roles={public:{name:'전체 광고',en:'AD DISCOVER',title:<>동의가 모이면,<br/>광고가 시작됩니다.</>,desc:'영상 등록부터 승인, 집행과 정산까지. 광고의 모든 과정을 투명하게 확인하세요.'},advertiser:{name:'광고주',en:'ADVERTISER',title:<>아이디어를 등록하고,<br/>신뢰를 쌓아보세요.</>,desc:'내가 등록한 광고를 모아보고, 광고비 예치와 환불을 관리하세요.'},rightsHolder:{name:'권리자',en:'RIGHTS HOLDER',title:<>내 목소리와 얼굴,<br/>내 동의로 시작합니다.</>,desc:'내 권리가 포함된 영상을 확인하고, 광고 사용을 승인하거나 거절하세요.'},platform:{name:'플랫폼',en:'PLATFORM',title:<>확인된 동의로,<br/>책임 있게 집행하세요.</>,desc:'권리자 승인과 영상 해시를 확인하고, 광고 게시와 정산을 진행하세요.'}};
-const demoData=[['온전히 나다운, 오늘의 목소리','라이프스타일',3,'lime','VOICE / ORIGINAL'],['새로운 하루를 여는 한 잔','음료·식품',2,'peach','A GOOD START'],['도시를 달리는 새로운 방식','모빌리티',4,'blue','MOVE FORWARD'],['피부에 닿는 작은 변화','뷰티',1,'pink','LESS, BUT BETTER'],['우리의 내일을 위한 선택','브랜드',5,'sand','FOR TOMORROW'],['듣고 싶은 순간을 담다','테크',6,'purple','SOUND OF YOU']].map((x,i)=>({address:'0x'+String(i+1).padStart(40,'0'),title:x[0],category:x[1],status:x[2],theme:x[3],art:x[4],advertiser:'0x49fCca18488eB17276E76D8FFFbE84D6d3ca9cC9',rightsHolder:'0x258df63a63c39682481f0A5d74c8B3fAf7Edf6Bf',platform:'0x292B2005f82De524121b147000642780e423A479',RIGHTS_FEE:'200',PLATFORM_FEE:'800',TOTAL_FEE:'1000',EXECUTION_WINDOW:'604800',USAGE_PERIOD:'2592000',escrowBalance:[2,3].includes(x[2])?'1000':'0',executionDeadline:Math.floor(Date.now()/1000)+86400*(i+1),usageEnd:Math.floor(Date.now()/1000)+86400*30,videoHash:'0x'+'1'.repeat(64),playable:x[2]===4,hasVideo:false,demo:true,blockNumber:123456+i}));
+const demoData = [];
 async function api(path,opt={}){const r=await fetch('/api'+path,{...opt,headers:opt.body instanceof FormData?opt.headers:{'Content-Type':'application/json',...opt.headers}});const d=await r.json();if(!r.ok)throw new Error(d.error||'요청 실패');return d;}
 function errorText(e){let s=e.reason||e.shortMessage||e.message||String(e);const map={'Deposit first':'먼저 광고비를 예치해주세요.','Not approved':'권리자 승인 후 집행할 수 있습니다.','Only rights holder':'지정된 권리자 지갑으로 연결해주세요.','Only advertiser':'지정된 광고주 지갑으로 연결해주세요.','Only platform':'지정된 플랫폼 지갑으로 연결해주세요.','Deadline passed':'집행 기한이 지났습니다. 예치금 환불을 확인하세요.','Video hash mismatch':'영상 해시가 다릅니다. 등록한 원본 파일을 선택하세요.','ERC20InsufficientAllowance':'CAD 지출 허용 한도가 부족합니다. 지출 허용 후 예치하세요.','ERC20InsufficientBalance':'CAD 잔액이 부족합니다.','user rejected':'MetaMask 요청을 취소했습니다.','insufficient funds':'수수료용 테스트 BFC가 부족합니다.'};for(const[k,v]of Object.entries(map))if(s.includes(k))return v;return s.slice(0,250);}
 async function fileHash(file){const b=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());return '0x'+Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('');}
@@ -23,7 +23,7 @@ async function refresh() {
 
     // GitHub Pages에서는 예시 광고만 표시
     if (IS_GITHUB_PAGES) {
-        setAds(demoData);
+        setAds([]);
         setLoading(false);
         return;
     }
